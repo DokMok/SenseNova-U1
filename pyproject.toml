@@ -48,7 +48,7 @@ dependencies = [
     # resolver conflict against an exact pin.
     "numpy>=1.24,<3",
     "pillow==12.0.0",
-    "tqdm==4.67.1",
+    "tqdm>=4.67.1",
     "packaging==25.0",
     # HTTP client used by `sensenova_u1.prompt_enhance.adapters`. Version is left
     # open because only the high-level AsyncClient is used and the API has been
