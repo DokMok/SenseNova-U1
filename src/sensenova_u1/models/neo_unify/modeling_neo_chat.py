@@ -1366,7 +1366,7 @@ class NEOChatModel(PreTrainedModel):
         return generated_text, generated_images
 
     @torch.no_grad()
-    def it2i_generate(self, tokenizer, prompt, images, cfg_scale=1, img_cfg_scale=1, cfg_norm='none', enable_timestep_shift=True, timestep_shift=1, image_size=(256, 256), num_steps=30, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>', IMG_CONTEXT_TOKEN='<IMG_CONTEXT>', method='euler', cfg_interval=(0, 1), batch_size=1, t_eps=0.02, think_mode=False, seed=0):
+    def it2i_generate(self, tokenizer, prompt, images, cfg_scale=1, img_cfg_scale=1, cfg_norm='none', enable_timestep_shift=True, timestep_shift=1, image_size=(256, 256), num_steps=30, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>', IMG_CONTEXT_TOKEN='<IMG_CONTEXT>', method='euler', cfg_interval=(0, 1), batch_size=1, t_eps=0.02, think_mode=False, preset_think='', seed=0):
         assert cfg_norm in ['none', 'global', 'channel']
         self._notify_layer_offload_phase("prefix")
 
@@ -1406,7 +1406,21 @@ class NEOChatModel(PreTrainedModel):
         needs_img_condition = needs_cfg and (img_cfg_scale == 1 or cfg_scale != img_cfg_scale)
         needs_uncondition = needs_cfg and img_cfg_scale != 1
 
-        think_content = '<think>\n' if think_mode else '<think>\n\n</think>\n\n' + IMG_START_TOKEN
+        assert not (think_mode and preset_think), (
+            'preset_think supplies the think block, so it cannot be combined '
+            'with think_mode, which generates one.'
+        )
+        if think_mode:
+            think_content = '<think>\n'
+        elif preset_think:
+            # Hand the model a reasoning block it did not write. The
+            # block is closed immediately, so generation starts right
+            # after it instead of continuing the text.
+            think_content = (
+                '<think>\n' + preset_think + '\n</think>\n\n' + IMG_START_TOKEN
+            )
+        else:
+            think_content = '<think>\n\n</think>\n\n' + IMG_START_TOKEN
         query_condition = self._build_t2i_query(question_condition, system_message=SYSTEM_MESSAGE_FOR_GEN, append_text=think_content)
         query_img_condition = (
             self._build_t2i_query('<image>' * len(images), append_text=IMG_START_TOKEN)
@@ -1688,7 +1702,7 @@ class NEOChatModel(PreTrainedModel):
         return image_prediction
 
     @torch.no_grad()
-    def t2i_generate(self, tokenizer, prompt, cfg_scale=1, timestep_shift=1, enable_timestep_shift=True, cfg_norm='none', image_size=(256, 256), num_steps=30, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>', IMG_CONTEXT_TOKEN='<IMG_CONTEXT>', method='euler', cfg_interval=(0, 1), batch_size=1, t_eps=0.02, think_mode=False, seed=0):
+    def t2i_generate(self, tokenizer, prompt, cfg_scale=1, timestep_shift=1, enable_timestep_shift=True, cfg_norm='none', image_size=(256, 256), num_steps=30, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>', IMG_CONTEXT_TOKEN='<IMG_CONTEXT>', method='euler', cfg_interval=(0, 1), batch_size=1, t_eps=0.02, think_mode=False, preset_think='', seed=0):
         assert self.concat_time_token_num == 0
         assert cfg_norm in ['cfg_zero_star', 'global', 'none', 'channel']
         self._notify_layer_offload_phase("prefix")
@@ -1702,7 +1716,21 @@ class NEOChatModel(PreTrainedModel):
         think_text = ""
         needs_cfg = cfg_scale > 1
 
-        think_content = '<think>\n' if think_mode else '<think>\n\n</think>\n\n' + IMG_START_TOKEN
+        assert not (think_mode and preset_think), (
+            'preset_think supplies the think block, so it cannot be combined '
+            'with think_mode, which generates one.'
+        )
+        if think_mode:
+            think_content = '<think>\n'
+        elif preset_think:
+            # Hand the model a reasoning block it did not write. The
+            # block is closed immediately, so generation starts right
+            # after it instead of continuing the text.
+            think_content = (
+                '<think>\n' + preset_think + '\n</think>\n\n' + IMG_START_TOKEN
+            )
+        else:
+            think_content = '<think>\n\n</think>\n\n' + IMG_START_TOKEN
         query_condition = self._build_t2i_query(question_condition, system_message=SYSTEM_MESSAGE_FOR_GEN, append_text=think_content)
         query_uncondition = self._build_t2i_query("", append_text=IMG_START_TOKEN) if needs_cfg else None
 
